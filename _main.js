@@ -25,7 +25,7 @@ const soundList = document.getElementById('sound-list');
 let isDragging = false;
 let animationFrameId = null;
 
-// 現在エディタで開いているファイルのパス（初期値は最初からある game.js）
+// 現在エディタで開いているファイルのパス（初期値は game.js）
 let currentFilePath = "script/game.js";
 
 
@@ -67,7 +67,7 @@ resizeCanvas();
 // 3. 複数ファイルの新規作成 ＆ 切り替えロジック
 // ==========================================
 
-// エディタに文字を入力するたびに、現在開いているファイルの中身を仮想ストレージにリアルタイム保存
+// キーが入力されるたびに、現在開いているファイルにリアルタイムで保存
 codeInput.addEventListener('input', () => {
   virtualStorage.saveFile(currentFilePath, codeInput.value);
 });
@@ -77,7 +77,6 @@ addScriptBtn.addEventListener('click', () => {
   const filename = prompt("新しいスクリプトの名前を入力してね (例: player.js)");
   if (!filename) return;
 
-  // 拡張子の自動補正（付いてなければ .js をつける）
   const fullFilename = filename.endsWith('.js') ? filename : `${filename}.js`;
   const path = `script/${fullFilename}`;
 
@@ -86,7 +85,7 @@ addScriptBtn.addEventListener('click', () => {
     return;
   }
 
-  // 1. 仮想ストレージに空の新規ファイルを作成
+  // 1. 仮想ストレージに新規ファイルを作成
   virtualStorage.saveFile(path, `// ${fullFilename} のコードをここに書くよ\n`);
 
   // 2. 左側のツリーUIに新しい要素を追加
@@ -96,28 +95,24 @@ addScriptBtn.addEventListener('click', () => {
   li.setAttribute('data-filepath', path);
   scriptList.appendChild(li);
 
-  // 3. 作成したファイルを自動的にエディタで開く
+  // 3. 作成したファイルを自動的に開く
   switchFile(path, li);
 });
 
 // ファイルを切り替える内部関数
 function switchFile(path, element) {
-  // 現在開いているファイルの最新状態をしっかり保存
   virtualStorage.saveFile(currentFilePath, codeInput.value);
 
-  // ツリー上のすべての「アクティブ（青文字）状態」を解除して、今選んだものだけを青くする
   document.querySelectorAll('.file-item').forEach(el => el.classList.remove('active'));
   element.classList.add('active');
 
-  // 開く対象を切り替えて、エディタの中身をそのファイルの文字に書き換える
   currentFilePath = path;
   codeInput.value = virtualStorage.files[path] || "";
   
-  // エディタのヘッダーの文字も更新
   document.querySelector('.panel-header').textContent = `📝 editor / ${path}`;
 }
 
-// ツリー内のJSファイルをクリックした時に切り替えるイベント（イベント委譲）
+// ツリー内のJSファイルをクリックした時に切り替えるイベント
 scriptList.addEventListener('click', (e) => {
   const item = e.target.closest('.file-item');
   if (!item) return;
@@ -148,10 +143,10 @@ function stopGame() {
 async function runGame() {
   stopGame();
 
-  // 1. 実行する瞬間に、現在開いているエディタの文字を確実に保存
+  // 現在開いているエディタの文字を確実に保存
   virtualStorage.saveFile(currentFilePath, codeInput.value);
 
-  // 2. システムを window グローバル環境に登録
+  // システムを window 環境に生やす
   window.api = api;
   window.onStart = callBack.start.bind(callBack);
   window.onTick = callBack.tick.bind(callBack);
@@ -159,23 +154,20 @@ async function runGame() {
   const ctx = canvas.getContext('2d');
   api._setContext(ctx);
 
-  // 3. _editor.js で全JSファイルを結合した Blob URL を取得
+  // 結合された Blob URL を取得
   const blobURL = editorBackend.buildProject();
 
   try {
-    // 4. 動的インポート（キャッシュ回避のタイムスタンプ付き）
+    // 動的インポート
     await import(`${blobURL}?t=${Date.now()}`);
 
-    // 5. 初期化（onStart）を1回だけ実行
     if (callBack._onStartCallback) callBack._onStartCallback();
 
-    // 6. メインのループを開始
     console.log("🟢 Game Started");
     function loop() {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 結合されたすべてのファイルから登録された「onTick」を実行！
       if (callBack._onTickCallback) callBack._onTickCallback();
 
       animationFrameId = requestAnimationFrame(loop);
@@ -250,7 +242,7 @@ function updateTreeUI(type, assetName, fullName) {
 addCostumeBtn.addEventListener('click', () => importAsset('costume', 'image/*'));
 addSoundBtn.addEventListener('click', () => importAsset('sound', 'audio/*'));
 
-// 初回起動時に初期コードを読み込む
+// 初回起動時の初期化
 document.addEventListener('DOMContentLoaded', () => {
   codeInput.value = virtualStorage.files["script/game.js"];
 });
