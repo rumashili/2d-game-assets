@@ -20,12 +20,11 @@ const addCostumeBtn = document.getElementById('add-costume-btn');
 const addSoundBtn = document.getElementById('add-sound-btn');
 const costumeList = document.getElementById('costume-list');
 const soundList = document.getElementById('sound-list');
+const currentPathText = document.getElementById('current-path-text');
 
 let isDragging = false;
 let animationFrameId = null;
 let currentFilePath = "script/game.js";
-
-// ★ Monaco Editorのインスタンスを保持する変数
 let editor = null;
 
 // ==========================================
@@ -42,7 +41,7 @@ window.addEventListener('mousemove', (e) => {
   if (newWidth > 200 && newWidth < window.innerWidth * 0.8) {
     gamePanel.style.width = `${newWidth}px`;
     resizeCanvas();
-    if (editor) editor.layout(); // エディタの幅が変わったことをMonacoに通知
+    if (editor) editor.layout();
   }
 });
 
@@ -64,18 +63,13 @@ resizeCanvas();
 
 
 // ==========================================
-// 3. 👑 Monaco Editor の初期化 ＆ 自作APIの型定義登録
+// 3. Monaco Editor の初期化 ＆ 型定義登録
 // ==========================================
 require(['vs/editor/editor.main'], function() {
-  // ① ユーザーのコードに「自作APIのヒント情報（型定義）」をペロッと覚えさせる
   monaco.languages.typescript.javascriptDefaults.addExtraLib(`
-    /** ゲームを制御するためのメインAPI */
     declare const api: {
-      /** カメラの位置や視野角を設定します。直接書き換えてもOK！ */
       camera: { pos: [number, number, number], rotate: number, size: number, FOV: number },
-      /** カメラの位置や設定をまとめて安全に変更します */
       setCamera(x: number, y: number, z?: number, rotate?: number, size?: number): void;
-      /** 安全な初期値を持ったゲームオブジェクト（位置、向き、サイズ、ヒットボックス情報など）を生成します */
       makeObject(arg?: {
         pos?: [number, number, number],
         rotate?: number,
@@ -83,48 +77,32 @@ require(['vs/editor/editor.main'], function() {
         hitBox?: { type?: 'circle' | 'rect', size?: { range?: number, width?: number, height?: number } },
         meta?: any
       }): any;
-      /** 2つのオブジェクトのヒットボックスが衝突しているかを検証します（回転対応） */
       isHit(obj1: any, obj2: any): boolean;
-      /** 指定したコスチューム画像を使って、オブジェクトを画面（カメラ空間）にスタンプ描画します */
       stamp(costumeName: string, object: any): void;
-      /** インポート済みのサウンドを最初から再生します */
       playSound(soundName: string): void;
-      
-      /** 画面への純粋な図形・テキストの描画命令シリーズ */
       display: {
-        /** 指定した位置に回転可能な矩形（四角形）を描画します */
         rectangle(pos: [number, number, number], size: [number, number], rotate?: number, style?: any, isApplyCamera?: boolean): void;
-        /** 3つの座標を結ぶ三角形を描画します（Zクリップ安全ガード付き） */
         triangle(pos1: [number, number, number], pos2: [number, number, number], pos3: [number, number, number], style?: any, isApplyCamera?: boolean): void;
-        /** 複数の座標を結ぶ多角形を描画します（Zクリップ安全ガード付き） */
         polygon(points: [number, number, number][], style?: any, isApplyCamera?: boolean): void;
-        /** 2点間に線を引きます */
         line(pos1: [number, number, number], pos2: [number, number, number], style?: any, isApplyCamera?: boolean): void;
-        /** 円を描画します */
         circle(pos: [number, number, number], radius: number, style?: any, isApplyCamera?: boolean): void;
-        /** 指定した位置に回転可能なテキスト（文字）を描画します */
         text(pos: [number, number, number], text: string, fontSize?: number, rotate?: number, style?: any, isApplyCamera?: boolean): void;
       }
     };
-
-    /** ゲームが起動した瞬間に1回だけ実行される初期化イベントを登録します */
     declare function onStart(fn: () => void): void;
-    /** 1秒間に約60回、画面更新ごとに繰り返し実行されるメインループイベントを登録します */
     declare function onTick(fn: () => void): void;
   `, 'filename/facts.d.ts');
 
-  // ② エディタをHTML上に生成する
   editor = monaco.editor.create(document.getElementById('code-input'), {
     value: virtualStorage.files[currentFilePath],
     language: 'javascript',
-    theme: 'vs-dark',            // カッコいい黒テーマ
-    automaticLayout: true,       // 画面幅の変化に自動追従
-    fontSize: 14,                // 文字サイズ
-    tabSize: 2,                  // タブのスペース
-    minimap: { enabled: false }  // 右側のちっちゃいマップは不要なのでオフ
+    theme: 'vs-dark',
+    automaticLayout: true,
+    fontSize: 14,
+    tabSize: 2,
+    minimap: { enabled: false }
   });
 
-  // ③ 文字が入力されるたびに仮想ストレージに自動保存する
   editor.onDidChangeModelContent(() => {
     virtualStorage.saveFile(currentFilePath, editor.getValue());
   });
@@ -150,7 +128,8 @@ addScriptBtn.addEventListener('click', () => {
 
   const li = document.createElement('li');
   li.className = 'file-item';
-  li.textContent = `📜 ${fullFilename}`;
+  // ★ スクリプト用のきれいなアイコンタグを挿入！
+  li.innerHTML = `<i class="fas fa-file-code" style="color: #cbd5e1;"></i> ${fullFilename}`;
   li.setAttribute('data-filepath', path);
   scriptList.appendChild(li);
 
@@ -159,17 +138,15 @@ addScriptBtn.addEventListener('click', () => {
 
 function switchFile(path, element) {
   if (!editor) return;
-  // 現在の文字を保存
   virtualStorage.saveFile(currentFilePath, editor.getValue());
 
   document.querySelectorAll('.file-item').forEach(el => el.classList.remove('active'));
   element.classList.add('active');
 
   currentFilePath = path;
-  // Monacoエディタの文字を書き換える
   editor.setValue(virtualStorage.files[path] || "");
   
-  document.querySelector('.panel-header').textContent = `📝 editor / ${path}`;
+  currentPathText.textContent = `editor / ${path}`;
 }
 
 scriptList.addEventListener('click', (e) => {
@@ -199,13 +176,11 @@ async function runGame() {
   stopGame();
   if (!editor) return;
 
-  // 実行直前の最新状態を保存
   virtualStorage.saveFile(currentFilePath, editor.getValue());
 
   window.api = api;
   window.onStart = callBack.start.bind(callBack);
   window.onTick = callBack.tick.bind(callBack);
-  // 他のモジュールから見やすいように仮想ストレージをグローバルに露出
   window.virtualStorage = virtualStorage; 
 
   const ctx = canvas.getContext('2d');
@@ -280,7 +255,14 @@ function updateTreeUI(type, assetName, fullName) {
 
   const li = document.createElement('li');
   li.className = 'file-item';
-  li.textContent = `${type === 'costume' ? '🎨' : '🔊'} ${fullName}`;
+  
+  // ★ 追加されたアセットの種類に応じて、Font Awesomeのきれいなアイコンをセット！
+  if (type === 'costume') {
+    li.innerHTML = `<i class="fas fa-image" style="color: #ffb703;"></i> ${fullName}`;
+  } else {
+    li.innerHTML = `<i class="fas fa-volume-high" style="color: #2196f3;"></i> ${fullName}`;
+  }
+  
   li.setAttribute('data-name', assetName);
   listElement.appendChild(li);
 }
