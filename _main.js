@@ -3,7 +3,6 @@ import { virtualStorage } from "./_scripts.js";
 import { editorBackend } from "./_editor.js";
 import { api } from "./_api.js";
 import { callBack } from "./_callBack.js";
-try {
 // ==========================================
 // 1. DOM要素の取得
 // ==========================================
@@ -269,6 +268,3 @@ function updateTreeUI(type, assetName, fullName) {
 
 addCostumeBtn.addEventListener('click', () => importAsset('costume', 'image/*'));
 addSoundBtn.addEventListener('click', () => importAsset('sound', 'audio/*'));
-} catch(e) {
-  alert(e)
-}
