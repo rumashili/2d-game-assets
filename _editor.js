@@ -3,14 +3,23 @@ import { virtualStorage } from "./_scripts.js";
 
 export const editorBackend = {
   /**
-   * 仮想スクリプトを1つに連結して、そのまま Blob URL に変換する
+   * 仮想ストレージ内のすべてのJSファイルを1つに連結して Blob URL に変換する
    */
   buildProject() {
-    // 将来的に複数ファイルになったら、ここでオブジェクト内をループして全部連結すればOK！
-    const userCode = virtualStorage.files["script/game.js"] || "";
+    let combinedUserCode = "";
 
-    // ユーザーの生のコードをそのまま Blob 化（文字列操作をしないので安全！）
-    const blob = new Blob([userCode], { type: 'application/javascript' });
+    // 仮想ストレージ内にあるすべてのファイルをループでチェック
+    for (const path in virtualStorage.files) {
+      // script/ フォルダの中身（JSファイル）だけを抽出して結合するよ
+      if (path.startsWith("script/")) {
+        combinedUserCode += `\n/* --- Start of ${path} --- */\n`;
+        combinedUserCode += virtualStorage.files[path];
+        combinedUserCode += `\n/* --- End of ${path} --- */\n`;
+      }
+    }
+
+    // windowグローバル方式なので、合体させたユーザーコードをそのままBlob（仮想ファイル）にする
+    const blob = new Blob([combinedUserCode], { type: 'application/javascript' });
     return URL.createObjectURL(blob);
   },
 
@@ -19,6 +28,6 @@ export const editorBackend = {
    */
   exportAsZip() {
     console.log("Saving project to ZIP...");
-    alert("ここにZIP展開処理が入ります。");
+    alert("ここにZIP展開処理が入ります。仮想環境のデータを本物のフォルダ構成に展開します。");
   }
 };

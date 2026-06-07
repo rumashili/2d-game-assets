@@ -35,10 +35,18 @@ export const api = {
     ctx.rotate(rotate * Math.PI / 180);
     ctx.scale(size, size);
 
-    // 画像がまだ読み込まれていないときのダミー四角
-    ctx.fillStyle = "magenta";
-    ctx.fillRect(-15, -15, 30, 30);
+    // インポートされた画像データがあるか確認
+    const costume = this.costumeList[costumeName];
+
+    if (costume && costume.loaded) {
+      // 本物の画像を描画（中心がx, yにくるように半分ずらす）
+      const img = costume.img;
+      ctx.drawImage(img, -img.width / 2, -img.height / 2);
+    } else {
+      // まだインポートされていない時のダミー四角（デバッグ用）
+      ctx.fillStyle = "magenta";
+      ctx.fillRect(-15, -15, 30, 30);
+    }
 
     ctx.restore();
-  }
-};
+  }};
