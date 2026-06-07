@@ -3,52 +3,74 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JS-Scratch Editor</title>
-  <link rel="stylesheet" href="style.css">
+  <title>JS-Scratch Engine</title>
+  <style>
+    body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: sans-serif; display: flex; }
+    #sidebar { width: 250px; background: #202020; color: #fff; display: flex; flex-direction: column; border-right: 2px solid #333; }
+    .section-header { padding: 10px; background: #2d2d2d; font-weight: bold; border-bottom: 1px solid #444; font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
+    .btn-add { background: #4caf50; color: white; border: none; padding: 2px 8px; border-radius: 4px; cursor: pointer; }
+    .file-list { list-style: none; padding: 0; margin: 0; flex-grow: 1; overflow-y: auto; }
+    .file-item { padding: 8px 15px; cursor: pointer; font-size: 13px; border-bottom: 1px solid #2a2a2a; display: flex; align-items: center; }
+    .file-item:hover { background: #2a2a2a; }
+    .file-item.active { background: #1e1e1e; color: #4fc1ff; font-weight: bold; }
+    .empty-msg { padding: 10px 15px; color: #777; font-size: 12px; font-style: italic; }
+    
+    #editor-panel { flex-grow: 1; display: flex; flex-direction: column; background: #1e1e1e; }
+    .panel-header { padding: 10px; background: #2d2d2d; color: #aaa; font-size: 12px; border-bottom: 1px solid #333; }
+    
+    /* ★ textareaから、Monaco Editor用のdivコンテナに変更したよ */
+    #code-input { flex-grow: 1; width: 100%; height: 100%; border: none; outline: none; }
+    
+    #drag-bar { width: 6px; background: #333; cursor: col-resize; transition: background 0.2s; }
+    #drag-bar:hover { background: #4fc1ff; }
+    
+    #game-panel { width: 450px; background: #151515; display: flex; flex-direction: column; border-left: 2px solid #333; }
+    .toolbar { padding: 10px; background: #222; display: flex; gap: 10px; border-bottom: 1px solid #333; }
+    .btn { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    #run-btn { background: #4caf50; color: white; }
+    #stop-btn { background: #f44336; color: white; }
+    #export-btn { background: #008cba; color: white; margin-left: auto; }
+    .canvas-wrapper { flex-grow: 1; display: flex; align-items: center; justify-content: center; padding: 10px; }
+    canvas { background: #000; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+  </style>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
+  <script>
+    // Monaco Editorの読み込みパスを設定
+    require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.39.0/min/vs' }});
+  </script>
 </head>
 <body>
 
-  <div class="container">
-    <div class="panel node-tree">
-      <div class="tree-header">📁 PROJECT</div>
-      <ul id="tree-root">
-        <li class="folder">
-          <span>📂 script</span>
-          <button class="add-btn" id="add-script-btn" title="スクリプトを追加">+</button>
-          <ul id="script-list"><li class="file-item active" data-filepath="script/game.js">📜 game.js</li></ul>
-        </li>
-        <li class="folder">
-          <span>📂 costume</span>
-          <button class="add-btn" id="add-costume-btn">+</button>
-          <ul id="costume-list"><li class="empty-msg">空のフォルダ</li></ul>
-        </li>
-        <li class="folder">
-          <span>📂 sound</span>
-          <button class="add-btn" id="add-sound-btn">+</button>
-          <ul id="sound-list"><li class="empty-msg">空のフォルダ</li></ul>
-        </li>
-      </ul>
-      <div class="export-zone">
-        <button id="export-btn">💾 プロジェクト保存 (ZIP)</button>
-      </div>
+  <div id="sidebar">
+    <div class="section-header">📜 SCRIPTS <button id="add-script-btn" class="btn-add">+</button></div>
+    <ul id="script-list" class="file-list">
+      <li class="file-item active" data-filepath="script/game.js">📜 game.js</li>
+    </ul>
+    
+    <div class="section-header">🎨 COSTUMES <button id="add-costume-btn" class="btn-add">+</button></div>
+    <ul id="costume-list" class="file-list"><div class="empty-msg">No costumes</div></ul>
+    
+    <div class="section-header">🔊 SOUNDS <button id="add-sound-btn" class="btn-add">+</button></div>
+    <ul id="sound-list" class="file-list"><div class="empty-msg">No sounds</div></ul>
+  </div>
+
+  <div id="editor-panel">
+    <div class="panel-header">📝 editor / script/game.js</div>
+    <div id="code-input"></div>
+  </div>
+
+  <div id="drag-bar"></div>
+
+  <div id="game-panel">
+    <div class="toolbar">
+      <button id="run-btn" class="btn">🟢 実行</button>
+      <button id="stop-btn" class="btn">🔴 停止</button>
+      <button id="export-btn" class="btn">📦 ZIP保存</button>
     </div>
-
-    <div class="panel editor-area" id="editor-panel">
-      <div class="panel-header">📝 editor / script / game.js</div>
-      <textarea id="code-input" spellcheck="false"></textarea>
-    </div>
-
-    <div class="resizer" id="drag-bar"></div>
-
-    <div class="panel game-area" id="game-panel">
-      <div class="game-controls">
-        <button id="run-btn" class="ctrl-btn run">🟢 実行 (緑の旗)</button>
-        <button id="stop-btn" class="ctrl-btn stop">🔴 停止</button>
-      </div>
-      <div class="canvas-wrapper">
-        <canvas id="game-canvas"></canvas>
-      </div>
+    <div class="canvas-wrapper">
+      <canvas id="game-canvas"></canvas>
     </div>
   </div>
 
