@@ -9,7 +9,6 @@ import { callBack } from "./_callBack.js";
 // ==========================================
 const resizer = document.getElementById('drag-bar');
 const gamePanel = document.getElementById('game-panel');
-const codeInput = document.getElementById('code-input');
 const canvas = document.getElementById('game-canvas');
 const runBtn = document.getElementById('run-btn');
 const stopBtn = document.getElementById('stop-btn');
@@ -24,13 +23,13 @@ const soundList = document.getElementById('sound-list');
 
 let isDragging = false;
 let animationFrameId = null;
-
-// 現在エディタで開いているファイルのパス（初期値は game.js）
 let currentFilePath = "script/game.js";
 
+// ★ Monaco Editorのインスタンスを保持する変数
+let editor = null;
 
 // ==========================================
-// 2. ドラッグバーによる画面幅の可変（リサイズ）処理
+// 2. ドラッグバーによる画面幅のリサイズ処理
 // ==========================================
 resizer.addEventListener('mousedown', () => {
   isDragging = true;
@@ -43,6 +42,7 @@ window.addEventListener('mousemove', (e) => {
   if (newWidth > 200 && newWidth < window.innerWidth * 0.8) {
     gamePanel.style.width = `${newWidth}px`;
     resizeCanvas();
+    if (editor) editor.layout(); // エディタの幅が変わったことをMonacoに通知
   }
 });
 
@@ -64,15 +64,76 @@ resizeCanvas();
 
 
 // ==========================================
-// 3. 複数ファイルの新規作成 ＆ 切り替えロジック
+// 3. 👑 Monaco Editor の初期化 ＆ 自作APIの型定義登録
 // ==========================================
+require(['vs/editor/editor.main'], function() {
+  // ① ユーザーのコードに「自作APIのヒント情報（型定義）」をペロッと覚えさせる
+  monaco.languages.typescript.javascriptDefaults.addExtraLib(`
+    /** ゲームを制御するためのメインAPI */
+    declare const api: {
+      /** カメラの位置や視野角を設定します。直接書き換えてもOK！ */
+      camera: { pos: [number, number, number], rotate: number, size: number, FOV: number },
+      /** カメラの位置や設定をまとめて安全に変更します */
+      setCamera(x: number, y: number, z?: number, rotate?: number, size?: number): void;
+      /** 安全な初期値を持ったゲームオブジェクト（位置、向き、サイズ、ヒットボックス情報など）を生成します */
+      makeObject(arg?: {
+        pos?: [number, number, number],
+        rotate?: number,
+        size?: number,
+        hitBox?: { type?: 'circle' | 'rect', size?: { range?: number, width?: number, height?: number } },
+        meta?: any
+      }): any;
+      /** 2つのオブジェクトのヒットボックスが衝突しているかを検証します（回転対応） */
+      isHit(obj1: any, obj2: any): boolean;
+      /** 指定したコスチューム画像を使って、オブジェクトを画面（カメラ空間）にスタンプ描画します */
+      stamp(costumeName: string, object: any): void;
+      /** インポート済みのサウンドを最初から再生します */
+      playSound(soundName: string): void;
+      
+      /** 画面への純粋な図形・テキストの描画命令シリーズ */
+      display: {
+        /** 指定した位置に回転可能な矩形（四角形）を描画します */
+        rectangle(pos: [number, number, number], size: [number, number], rotate?: number, style?: any, isApplyCamera?: boolean): void;
+        /** 3つの座標を結ぶ三角形を描画します（Zクリップ安全ガード付き） */
+        triangle(pos1: [number, number, number], pos2: [number, number, number], pos3: [number, number, number], style?: any, isApplyCamera?: boolean): void;
+        /** 複数の座標を結ぶ多角形を描画します（Zクリップ安全ガード付き） */
+        polygon(points: [number, number, number][], style?: any, isApplyCamera?: boolean): void;
+        /** 2点間に線を引きます */
+        line(pos1: [number, number, number], pos2: [number, number, number], style?: any, isApplyCamera?: boolean): void;
+        /** 円を描画します */
+        circle(pos: [number, number, number], radius: number, style?: any, isApplyCamera?: boolean): void;
+        /** 指定した位置に回転可能なテキスト（文字）を描画します */
+        text(pos: [number, number, number], text: string, fontSize?: number, rotate?: number, style?: any, isApplyCamera?: boolean): void;
+      }
+    };
 
-// キーが入力されるたびに、現在開いているファイルにリアルタイムで保存
-codeInput.addEventListener('input', () => {
-  virtualStorage.saveFile(currentFilePath, codeInput.value);
+    /** ゲームが起動した瞬間に1回だけ実行される初期化イベントを登録します */
+    declare function onStart(fn: () => void): void;
+    /** 1秒間に約60回、画面更新ごとに繰り返し実行されるメインループイベントを登録します */
+    declare function onTick(fn: () => void): void;
+  `, 'filename/facts.d.ts');
+
+  // ② エディタをHTML上に生成する
+  editor = monaco.editor.create(document.getElementById('code-input'), {
+    value: virtualStorage.files[currentFilePath],
+    language: 'javascript',
+    theme: 'vs-dark',            // カッコいい黒テーマ
+    automaticLayout: true,       // 画面幅の変化に自動追従
+    fontSize: 14,                // 文字サイズ
+    tabSize: 2,                  // タブのスペース
+    minimap: { enabled: false }  // 右側のちっちゃいマップは不要なのでオフ
+  });
+
+  // ③ 文字が入力されるたびに仮想ストレージに自動保存する
+  editor.onDidChangeModelContent(() => {
+    virtualStorage.saveFile(currentFilePath, editor.getValue());
+  });
 });
 
-// 新しいJSファイルをツリー上に作成する処理
+
+// ==========================================
+// 4. 複数ファイルの切り替えロジック
+// ==========================================
 addScriptBtn.addEventListener('click', () => {
   const filename = prompt("新しいスクリプトの名前を入力してね (例: player.js)");
   if (!filename) return;
@@ -85,55 +146,49 @@ addScriptBtn.addEventListener('click', () => {
     return;
   }
 
-  // 1. 仮想ストレージに新規ファイルを作成
   virtualStorage.saveFile(path, `// ${fullFilename} のコードをここに書くよ\n`);
 
-  // 2. 左側のツリーUIに新しい要素を追加
   const li = document.createElement('li');
   li.className = 'file-item';
   li.textContent = `📜 ${fullFilename}`;
   li.setAttribute('data-filepath', path);
   scriptList.appendChild(li);
 
-  // 3. 作成したファイルを自動的に開く
   switchFile(path, li);
 });
 
-// ファイルを切り替える内部関数
 function switchFile(path, element) {
-  virtualStorage.saveFile(currentFilePath, codeInput.value);
+  if (!editor) return;
+  // 現在の文字を保存
+  virtualStorage.saveFile(currentFilePath, editor.getValue());
 
   document.querySelectorAll('.file-item').forEach(el => el.classList.remove('active'));
   element.classList.add('active');
 
   currentFilePath = path;
-  codeInput.value = virtualStorage.files[path] || "";
+  // Monacoエディタの文字を書き換える
+  editor.setValue(virtualStorage.files[path] || "");
   
   document.querySelector('.panel-header').textContent = `📝 editor / ${path}`;
 }
 
-// ツリー内のJSファイルをクリックした時に切り替えるイベント
 scriptList.addEventListener('click', (e) => {
   const item = e.target.closest('.file-item');
   if (!item) return;
   const path = item.getAttribute('data-filepath');
-  if (path) {
-    switchFile(path, item);
-  }
+  if (path) switchFile(path, item);
 });
 
 
 // ==========================================
-// 4. ゲームの実行・停止（バックエンドコア）
+// 5. ゲームの実行・停止
 // ==========================================
-
 function stopGame() {
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId);
     animationFrameId = null;
   }
   callBack.reset();
-  
   const ctx = canvas.getContext('2d');
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -142,23 +197,23 @@ function stopGame() {
 
 async function runGame() {
   stopGame();
+  if (!editor) return;
 
-  // 現在開いているエディタの文字を確実に保存
-  virtualStorage.saveFile(currentFilePath, codeInput.value);
+  // 実行直前の最新状態を保存
+  virtualStorage.saveFile(currentFilePath, editor.getValue());
 
-  // システムを window 環境に生やす
   window.api = api;
   window.onStart = callBack.start.bind(callBack);
   window.onTick = callBack.tick.bind(callBack);
+  // 他のモジュールから見やすいように仮想ストレージをグローバルに露出
+  window.virtualStorage = virtualStorage; 
 
   const ctx = canvas.getContext('2d');
   api._setContext(ctx);
 
-  // 結合された Blob URL を取得
   const blobURL = editorBackend.buildProject();
 
   try {
-    // 動的インポート
     await import(`${blobURL}?t=${Date.now()}`);
 
     if (callBack._onStartCallback) callBack._onStartCallback();
@@ -167,9 +222,7 @@ async function runGame() {
     function loop() {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
       if (callBack._onTickCallback) callBack._onTickCallback();
-
       animationFrameId = requestAnimationFrame(loop);
     }
     animationFrameId = requestAnimationFrame(loop);
@@ -186,9 +239,8 @@ exportBtn.addEventListener('click', () => editorBackend.exportAsZip());
 
 
 // ==========================================
-// 5. アセット（画像・音）の仮想インポート処理
+// 6. アセットの仮想インポート処理
 // ==========================================
-
 function importAsset(type, accept) {
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
@@ -209,20 +261,15 @@ function importAsset(type, accept) {
         const img = new Image();
         img.src = dataUrl;
         api.costumeList[assetName] = { img: img, loaded: true };
-        console.log(`🎨 コスチュームを仮想インポートしました: ${assetName}`);
       } else if (type === 'sound') {
         virtualStorage.addSound(assetName, dataUrl);
         const audio = new Audio(dataUrl);
         api.soundList[assetName] = audio;
-        console.log(`🎵 サウンドを仮想インポートしました: ${assetName}`);
       }
-
       updateTreeUI(type, assetName, file.name);
     };
-
     reader.readAsDataURL(file);
   });
-
   fileInput.click();
 }
 
@@ -235,14 +282,8 @@ function updateTreeUI(type, assetName, fullName) {
   li.className = 'file-item';
   li.textContent = `${type === 'costume' ? '🎨' : '🔊'} ${fullName}`;
   li.setAttribute('data-name', assetName);
-  
   listElement.appendChild(li);
 }
 
 addCostumeBtn.addEventListener('click', () => importAsset('costume', 'image/*'));
 addSoundBtn.addEventListener('click', () => importAsset('sound', 'audio/*'));
-
-// 初回起動時の初期化
-document.addEventListener('DOMContentLoaded', () => {
-  codeInput.value = virtualStorage.files["script/game.js"];
-});
