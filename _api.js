@@ -102,14 +102,16 @@ export const api = {
     };
   },
 
-  /**
-   * 💥 3つの組み合わせに対応した汎用当たり判定関数
+/**
+   * 💥 回転対応版（OBB対応）の汎用当たり判定関数
    */
   isHit(obj1, obj2) {
     const t1 = obj1.hitBox.type;
     const t2 = obj2.hitBox.type;
 
-    // ① Circle vs Circle
+    // ----------------------------------------------------
+    // ① Circle vs Circle (円同士は回転しても形が変わらないよ)
+    // ----------------------------------------------------
     if (t1 === "circle" && t2 === "circle") {
       const r1 = obj1.hitBox.size.range * obj1.size;
       const r2 = obj2.hitBox.size.range * obj2.size;
@@ -120,48 +122,105 @@ export const api = {
       return dist < (r1 + r2);
     }
 
-    // ② Rect vs Rect
-    if (t1 === "rect" && t2 === "rect") {
-      // Z軸が離れすぎていたら当たらない（簡易判定：誤差1未満）
-      if (Math.abs(obj1.pos[2] - obj2.pos[2]) > 1) return false;
+    // ----------------------------------------------------
+    // ② Circle vs Rect (円 vs 回転する矩形)
+    // ----------------------------------------------------
+    if ((t1 === "circle" && t2 === "rect") || (t1 === "rect" && t2 === "circle")) {
+      const cObj = t1 === "circle" ? obj1 : obj2;
+      const rObj = t1 === "rect" ? obj1 : obj2;
 
-      const w1 = (obj1.hitBox.size.width * obj1.size) / 2;
-      const h1 = (obj1.hitBox.size.height * obj1.size) / 2;
-      const w2 = (obj2.hitBox.size.width * obj2.size) / 2;
-      const h2 = (obj2.hitBox.size.height * obj2.size) / 2;
+      // Z軸のレイヤーチェック
+      if (Math.abs(cObj.pos[2] - rObj.pos[2]) > 1) return false;
 
-      return (
-        Math.abs(obj1.pos[0] - obj2.pos[0]) < w1 + w2 &&
-        Math.abs(obj1.pos[1] - obj2.pos[1]) < h1 + h2
-      );
+      const cRad = cObj.hitBox.size.range * cObj.size;
+      const rW = (rObj.hitBox.size.width * rObj.size) / 2;
+      const rH = (rObj.hitBox.size.height * rObj.size) / 2;
+
+      // ★ 魔法の処理：円の中心座標を「矩形から見たローカル座標」に変換する
+      // 矩形の中心を原点(0,0)とした相対座標にし、矩形の回転角度の逆方向（マイナス）に回転させる！
+      const dx = cObj.pos[0] - rObj.pos[0];
+      const dy = cObj.pos[1] - rObj.pos[1];
+      const rad = (-rObj.rotate * Math.PI) / 180; // 逆回転
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+
+      // まっすぐな世界にワープした円の中心座標
+      const localCx = Math.abs(dx * cos - dy * sin);
+      const localCy = Math.abs(dx * sin + dy * cos);
+
+      // ここからは「まっすぐな矩形 vs 円」のアルゴリズムがそのまま使えるよ！
+      if (localCx > rW + cRad) return false;
+      if (localCy > rH + cRad) return false;
+
+      if (localCx <= rW) return true;
+      if (localCy <= rH) return true;
+
+      // 角との衝突判定
+      const cornerDx = localCx - rW;
+      const cornerDy = localCy - rH;
+      return cornerDx * cornerDx + cornerDy * cornerDy < cRad * cRad;
     }
 
-    // ③ Circle vs Rect (異種交差判定)
-    const cObj = t1 === "circle" ? obj1 : obj2;
-    const rObj = t1 === "rect" ? obj1 : obj2;
+    // ----------------------------------------------------
+    // ③ Rect vs Rect (回転する矩形同士の判定)
+    // 分離軸定理（SAT）の考え方を、扱いやすく片方のローカルに絞って判定するよ！
+    // ----------------------------------------------------
+    if (t1 === "rect" && t2 === "rect") {
+      if (Math.abs(obj1.pos[2] - obj2.pos[2]) > 1) return false;
 
-    if (Math.abs(cObj.pos[2] - rObj.pos[2]) > 1) return false;
+      // 互いのローカル座標系で「重なり」をチェックするヘルパー
+      const checkOneSidedOBB = (rectA, rectB) => {
+        const wA = (rectA.hitBox.size.width * rectA.size) / 2;
+        const hA = (rectA.hitBox.size.height * rectA.size) / 2;
+        const wB = (rectB.hitBox.size.width * rectB.size) / 2;
+        const hB = (rectB.hitBox.size.height * rectB.size) / 2;
 
-    const cRad = cObj.hitBox.size.range * cObj.size;
-    const rW = (rObj.hitBox.size.width * rObj.size) / 2;
-    const rH = (rObj.hitBox.size.height * rObj.size) / 2;
+        // rectB の 4つの角のワールド座標を計算する
+        const bRad = (rectB.rotate * Math.PI) / 180;
+        const bCos = Math.cos(bRad);
+        const bSin = Math.sin(bRad);
 
-    // 矩形の中心から見た円の中心の相対距離
-    const distX = Math.abs(cObj.pos[0] - rObj.pos[0]);
-    const distY = Math.abs(cObj.pos[1] - rObj.pos[1]);
+        const corners = [
+          [-wB, -hB], [wB, -hB], [wB, hB], [-wB, hB]
+        ].map(([kx, ky]) => {
+          // ワールド座標に変換
+          return [
+            rectB.pos[0] + (kx * bCos - ky * bSin),
+            rectB.pos[1] + (kx * bSin + ky * bCos)
+          ];
+        });
 
-    if (distX > rW + cRad) return false;
-    if (distY > rH + cRad) return false;
+        // rectB の角を、すべて「rectA から見たローカル座標」に逆回転させて移す
+        const aRad = (-rectA.rotate * Math.PI) / 180;
+        const aCos = Math.cos(aRad);
+        const aSin = Math.sin(aRad);
 
-    if (distX <= rW) return true;
-    if (distY <= rH) return true;
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
 
-    // 角の衝突判定
-    const dx = distX - rW;
-    const dy = distY - rH;
-    return dx * dx + dy * dy < cRad * cRad;
+        corners.forEach(([wx, wy]) => {
+          const dx = wx - rectA.pos[0];
+          const dy = wy - rectA.pos[1];
+          const lx = dx * aCos - dy * aSin;
+          const ly = dx * aSin + dy * aCos;
+
+          minX = Math.min(minX, lx);
+          maxX = Math.max(maxX, lx);
+          minY = Math.min(minY, ly);
+          maxY = Math.max(maxY, ly);
+        });
+
+        // rectAの範囲（[-wA, wA], [-hA, hA]）と、rectBの包絡矩形が重なっているかチェック
+        return !(maxX < -wA || minX > wA || maxY < -rH || minY > hA);
+      };
+
+      // 矩形同士の場合、両方の矩形の軸から見て「どちらから見ても重なっている」ときだけ衝突となるよ！
+      return checkOneSidedOBB(obj1, obj2) && checkOneSidedOBB(obj2, obj1);
+    }
+
+    return false;
   },
-
+  
   /**
    * 🖼️ 初回自動ロード対応スタンプ
    */
@@ -228,5 +287,214 @@ export const api = {
       audio.currentTime = 0;
       audio.play().catch(e => console.log("再生エラー(初回クリックが必要):", e));
     }
-  }
+  },
+
+  /**
+   * 📺 純粋な図形・テキスト描画系API (Zクリップ＆回転対応版)
+   */
+  display: {
+    // スタイル指定が空のときのデフォルト値
+    _defaultStyle(style) {
+      return {
+        fillColor: style.fillColor ?? "transparent",
+        border: {
+          size: style.border?.size ?? 0,
+          color: style.border?.color ?? "transparent"
+        }
+      };
+    },
+
+    // 共通の描画セットアップ（色と線をパスに適用する内部関数）
+    _renderPath(ctx, s) {
+      if (s.fillColor !== "transparent") {
+        ctx.fillStyle = s.fillColor;
+        ctx.fill();
+      }
+      if (s.border.size > 0 && s.border.color !== "transparent") {
+        ctx.lineWidth = s.border.size;
+        ctx.strokeStyle = s.border.color;
+        ctx.stroke();
+      }
+    },
+
+    // 3次元座標 [x, y, z] を、設定に応じて Canvas上の [x, y] とスケールに変換する関数
+    _getRenderCoord(pos, isApplyCamera) {
+      if (isApplyCamera) {
+        // Z軸の奥行きを計算 (親の api.camera.pos を参照)
+        const z = (pos[2] ?? 0) - parentApi.camera.pos[2];
+        
+        // ★ Zクリップ: カメラより手前、またはカメラと全く同じ位置にある場合は無効（scale: -1）とする
+        if (z <= 0) return { x: 0, y: 0, scale: -1 };
+
+        // Z軸奥行きを持ったオブジェクトとしてカメラ投影を通す
+        return parentApi._transPos({
+          pos: [pos[0], pos[1], pos[2] ?? 0],
+          rotate: 0,
+          size: 1
+        });
+      } else {
+        // カメラを無視する場合（画面固定UIなど）：zは無視して等倍として扱う
+        const halfW = ctx.canvas.width / 2;
+        const halfH = ctx.canvas.height / 2;
+        return {
+          x: halfW + pos[0],
+          y: halfH - pos[1],
+          scale: 1
+        };
+      }
+    },
+
+    /**
+     * 🟦 1. 矩形 (rectangle) - 🔄 回転対応！
+     * 中心座標 pos[x, y, z]、サイズ [width, height]、回転角度 rotate
+     */
+    rectangle(pos, size, rotate = 0, style = {}, isApplyCamera = true) {
+      if (!ctx) return;
+      const r = this._getRenderCoord(pos, isApplyCamera);
+      if (r.scale <= 0) return; // Zクリップまたは画面外ならスキップ
+
+      const s = this._defaultStyle(style);
+      const w = size[0] * r.scale;
+      const h = size[1] * r.scale;
+
+      ctx.save();
+      ctx.translate(r.x, r.y);
+      
+      // カメラ適用時は「矩形自身の回転 - カメラの回転」、非適用時は矩形自身の回転のみ
+      const finalRotate = isApplyCamera ? (rotate - parentApi.camera.rotate) : rotate;
+      ctx.rotate((finalRotate * Math.PI) / 180);
+
+      ctx.beginPath();
+      // 中心が pos になるように、原点から半分ずらして矩形を作成
+      ctx.rect(-w / 2, -h / 2, w, h);
+      this._renderPath(ctx, s);
+      ctx.restore();
+    },
+
+    /**
+     * 🔺 2. 三角形 (triangle) - 🛡️ Zクリップ対応！
+     * 3つの3次元座標 pos1, pos2, pos3
+     */
+    triangle(pos1, pos2, pos3, style = {}, isApplyCamera = true) {
+      if (!ctx) return;
+      const r1 = this._getRenderCoord(pos1, isApplyCamera);
+      const r2 = this._getRenderCoord(pos2, isApplyCamera);
+      const r3 = this._getRenderCoord(pos3, isApplyCamera);
+
+      // ★ Zクリップ: 3つの頂点のうち、1つでもカメラより手前にあったら描画を完全スキップ
+      if (r1.scale < 0 || r2.scale < 0 || r3.scale < 0) return;
+
+      const s = this._defaultStyle(style);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(r1.x, r1.y);
+      ctx.lineTo(r2.x, r2.y);
+      ctx.lineTo(r3.x, r3.y);
+      ctx.closePath();
+      this._renderPath(ctx, s);
+      ctx.restore();
+    },
+
+    /**
+     * ⬡ 3. 多角形 (polygon) - 🛡️ Zクリップ対応！
+     * 3次元座標の配列 [[x,y,z], [x,y,z], ...]
+     */
+    polygon(points, style = {}, isApplyCamera = true) {
+      if (!ctx || points.length < 3) return;
+      const s = this._defaultStyle(style);
+
+      // 一旦すべての描画用座標を計算する
+      const renders = [];
+      for (let i = 0; i < points.length; i++) {
+        const r = this._getRenderCoord(points[i], isApplyCamera);
+        // ★ Zクリップ: 1つでもカメラより手前（裏側）の頂点があれば、おかしくなる前に全スキップ！
+        if (r.scale < 0) return;
+        renders.push(r);
+      }
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(renders[0].x, renders[0].y);
+      for (let i = 1; i < renders.length; i++) {
+        ctx.lineTo(renders[i].x, renders[i].y);
+      }
+      ctx.closePath();
+      this._renderPath(ctx, s);
+      ctx.restore();
+    },
+
+    /**
+     * ➖ 4. 線 (line) - 🛡️ Zクリップ対応！
+     * 始点 pos1[x, y, z]、終点 pos2[x, y, z]
+     */
+    line(pos1, pos2, style = {}, isApplyCamera = true) {
+      if (!ctx) return;
+      const r1 = this._getRenderCoord(pos1, isApplyCamera);
+      const r2 = this._getRenderCoord(pos2, isApplyCamera);
+      
+      // ★ Zクリップ: どちらかの端点がカメラの裏にいったらスキップ
+      if (r1.scale < 0 || r2.scale < 0) return;
+
+      const size = style.border?.size ?? 1;
+      const color = style.border?.color ?? "white";
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(r1.x, r1.y);
+      ctx.lineTo(r2.x, r2.y);
+      ctx.lineWidth = size * r1.scale; // 始点側のスケールを基準にする
+      ctx.strokeStyle = color;
+      ctx.stroke();
+      ctx.restore();
+    },
+
+    /**
+     * 🟡 5. 円 (circle)
+     * 中心座標 pos[x, y, z]、半径 radius
+     */
+    circle(pos, radius, style = {}, isApplyCamera = true) {
+      if (!ctx) return;
+      const r = this._getRenderCoord(pos, isApplyCamera);
+      if (r.scale <= 0) return; // Zクリップ含む
+
+      const s = this._defaultStyle(style);
+      const finalRadius = radius * r.scale;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, finalRadius, 0, Math.PI * 2);
+      this._renderPath(ctx, s);
+      ctx.restore();
+    },
+
+    /**
+     * 🔤 6. テキスト (text) - 🔄 回転対応！
+     * 位置 pos[x, y, z]、文字列 text、サイズ fontSize、回転角度 rotate
+     */
+    text(pos, text, fontSize = 20, rotate = 0, style = {}, isApplyCamera = true) {
+      if (!ctx) return;
+      const r = this._getRenderCoord(pos, isApplyCamera);
+      if (r.scale <= 0) return; // Zクリップ含む
+
+      const fillColor = style.fillColor ?? "white";
+      const finalSize = fontSize * r.scale;
+
+      ctx.save();
+      ctx.translate(r.x, r.y);
+      
+      // カメラ適用時はカメラの回転を相殺、非適用時はそのまま回転
+      const finalRotate = isApplyCamera ? (rotate - parentApi.camera.rotate) : rotate;
+      ctx.rotate((finalRotate * Math.PI) / 180);
+
+      ctx.font = `${finalSize}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = fillColor;
+      
+      // 回転の中心が文字の中心になるように (0, 0) に描画
+      ctx.fillText(text, 0, 0);
+      ctx.restore();
+    }
+  },
 };
