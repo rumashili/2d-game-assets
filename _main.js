@@ -62,50 +62,71 @@ resizeCanvas();
 
 
 // ==========================================
-// 3. Monaco Editor の初期化 ＆ 型定義登録
+// 3. 👑 Monaco Editor の初期化（超安全・遅延起動版）
 // ==========================================
-require(['vs/editor/editor.main'], function() {
-  monaco.languages.typescript.javascriptDefaults.addExtraLib(`
-    declare const api: {
-      camera: { pos: [number, number, number], rotate: number, size: number, FOV: number },
-      setCamera(x: number, y: number, z?: number, rotate?: number, size?: number): void;
-      makeObject(arg?: {
-        pos?: [number, number, number],
-        rotate?: number,
-        size?: number,
-        hitBox?: { type?: 'circle' | 'rect', size?: { range?: number, width?: number, height?: number } },
-        meta?: any
-      }): any;
-      isHit(obj1: any, obj2: any): boolean;
-      stamp(costumeName: string, object: any): void;
-      playSound(soundName: string): void;
-      display: {
-        rectangle(pos: [number, number, number], size: [number, number], rotate?: number, style?: any, isApplyCamera?: boolean): void;
-        triangle(pos1: [number, number, number], pos2: [number, number, number], pos3: [number, number, number], style?: any, isApplyCamera?: boolean): void;
-        polygon(points: [number, number, number][], style?: any, isApplyCamera?: boolean): void;
-        line(pos1: [number, number, number], pos2: [number, number, number], style?: any, isApplyCamera?: boolean): void;
-        circle(pos: [number, number, number], radius: number, style?: any, isApplyCamera?: boolean): void;
-        text(pos: [number, number, number], text: string, fontSize?: number, rotate?: number, style?: any, isApplyCamera?: boolean): void;
-      }
-    };
-    declare function onStart(fn: () => void): void;
-    declare function onTick(fn: () => void): void;
-  `, 'filename/facts.d.ts');
+function initMonaco() {
+  try {
+    if (typeof require === 'undefined' || typeof monaco === 'undefined') {
+      // まだライブラリが届いていなければ、0.1秒後に再チャレンジ
+      setTimeout(initMonaco, 100);
+      return;
+    }
 
-  editor = monaco.editor.create(document.getElementById('code-input'), {
-    value: virtualStorage.files[currentFilePath],
-    language: 'javascript',
-    theme: 'vs-dark',
-    automaticLayout: true,
-    fontSize: 14,
-    tabSize: 2,
-    minimap: { enabled: false }
-  });
+    // 型定義の登録
+    monaco.languages.typescript.javascriptDefaults.addExtraLib(`
+      declare const api: {
+        camera: { pos: [number, number, number], rotate: number, size: number, FOV: number },
+        setCamera(x: number, y: number, z?: number, rotate?: number, size?: number): void;
+        makeObject(arg?: { pos?: [number, number, number], rotate?: number, size?: number, hitBox?: any, meta?: any }): any;
+        isHit(obj1: any, obj2: any): boolean;
+        stamp(costumeName: string, object: any): void;
+        playSound(soundName: string): void;
+        display: {
+          rectangle(pos: [number, number, number], size: [number, number], rotate?: number, style?: any, isApplyCamera?: boolean): void;
+          triangle(pos1: [number, number, number], pos2: [number, number, number], pos3: [number, number, number], style?: any, isApplyCamera?: boolean): void;
+          polygon(points: [number, number, number][], style?: any, isApplyCamera?: boolean): void;
+          line(pos1: [number, number, number], pos2: [number, number, number], style?: any, isApplyCamera?: boolean): void;
+          circle(pos: [number, number, number], radius: number, style?: any, isApplyCamera?: boolean): void;
+          text(pos: [number, number, number], text: string, fontSize?: number, rotate?: number, style?: any, isApplyCamera?: boolean): void;
+        }
+      };
+      declare function onStart(fn: () => void): void;
+      declare function onTick(fn: () => void): void;
+    `, 'filename/facts.d.ts');
 
-  editor.onDidChangeModelContent(() => {
-    virtualStorage.saveFile(currentFilePath, editor.getValue());
+    const editorContainer = document.getElementById('code-input');
+    if (!editorContainer) return;
+
+    // エディタ生成！
+    editor = monaco.editor.create(editorContainer, {
+      value: virtualStorage.files[currentFilePath] || "// コードをここに書くよ\n",
+      language: 'javascript',
+      theme: 'vs-dark',
+      automaticLayout: true,
+      fontSize: 14,
+      tabSize: 2,
+      minimap: { enabled: false }
+    });
+
+    editor.onDidChangeModelContent(() => {
+      virtualStorage.saveFile(currentFilePath, editor.getValue());
+    });
+
+    console.log("🟢 Monaco Editor Ready!");
+  } catch (e) {
+    console.error("Monacoの起動に失敗したよ:", e);
+  }
+}
+
+// ボタン等のイベント登録を邪魔しないように、すべてが終わったあとにエディタを起動する
+if (typeof require !== 'undefined') {
+  require(['vs/editor/editor.main'], function() {
+    initMonaco();
   });
-});
+} else {
+  // requireがなくても、とりあえずループで待ってみる
+  setTimeout(initMonaco, 500);
+}
 
 
 // ==========================================
