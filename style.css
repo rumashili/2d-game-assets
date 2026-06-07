@@ -1,0 +1,227 @@
+/* 全体のリセットと基本設定 */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body, html {
+  width: 100%;
+  height: 100%;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: #1e1e1e;
+  color: #fff;
+  overflow: hidden;
+}
+
+/* 全体を横並びにするメインコンテナ */
+.container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+/* パネルの共通設定 */
+.panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 📁 左側：ノードツリー (画面全体の約1/6にがっちり固定) */
+.node-tree {
+  width: 16.66%;
+  min-width: 180px;
+  background: #252526;
+  border-right: 1px solid #3c3c3c;
+  padding: 15px;
+  position: relative;
+}
+
+.tree-header {
+  font-size: 12px;
+  font-weight: bold;
+  color: #858585;
+  margin-bottom: 15px;
+  letter-spacing: 1px;
+}
+
+ul {
+  list-style: none;
+  padding-left: 10px;
+}
+
+li {
+  margin: 8px 0;
+  font-size: 14px;
+  color: #cccccc;
+}
+
+.folder {
+  font-weight: bold;
+  color: #e2e2e2;
+  margin-top: 15px;
+  position: relative;
+}
+
+.folder ul {
+  font-weight: normal;
+  padding-left: 15px;
+}
+
+.file-item {
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.file-item:hover {
+  background: #2a2d2e;
+  color: #fff;
+}
+
+.file-item.active {
+  background: #37373d;
+  color: #007acc;
+  font-weight: bold;
+}
+
+.empty-msg {
+  font-size: 11px;
+  color: #666;
+  font-style: italic;
+  padding-left: 5px;
+}
+
+/* プラスボタンのデザイン */
+.add-btn {
+  background: #3c3c3c;
+  border: none;
+  color: #ccc;
+  width: 18px;
+  height: 18px;
+  line-height: 16px;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 12px;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+.add-btn:hover {
+  background: #007acc;
+  color: #fff;
+}
+
+/* 一番下の書き出しゾーン */
+.export-zone {
+  position: absolute;
+  bottom: 15px;
+  left: 15px;
+  right: 15px;
+}
+
+#export-btn {
+  width: 100%;
+  background: #0e639c;
+  color: white;
+  border: none;
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 13px;
+}
+#export-btn:hover {
+  background: #1177bb;
+}
+
+/* 📝 真ん中：コードエディタ領域 (可変) */
+.editor-area {
+  flex: 1;
+  background: #1e1e1e;
+}
+
+.panel-header {
+  background: #2d2d2d;
+  padding: 8px 15px;
+  font-size: 12px;
+  color: #aaa;
+  border-bottom: 1px solid #3c3c3c;
+}
+
+textarea {
+  flex: 1;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 16px;
+  line-height: 1.5;
+  padding: 15px;
+  border: none;
+  resize: none;
+  outline: none;
+}
+
+/* ↔️ ドラッグする仕切り棒 */
+.resizer {
+  width: 6px;
+  background: #2d2d2d;
+  cursor: col-resize;
+  position: relative;
+  z-index: 10;
+  transition: background 0.2s;
+}
+.resizer:hover, .resizer:active {
+  background: #007acc; /* ドラッグ中やホバーでScratchやVSCodeっぽく青く光る */
+}
+
+/* 🎮 右側：ゲーム画面領域 (可変) */
+.game-area {
+  width: 45%; /* デフォルトの初期幅 */
+  min-width: 250px;
+  background: #111;
+  border-left: 1px solid #3c3c3c;
+}
+
+.game-controls {
+  background: #2d2d2d;
+  padding: 8px 15px;
+  display: flex;
+  gap: 10px;
+  border-bottom: 1px solid #3c3c3c;
+}
+
+.ctrl-btn {
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 12px;
+  transition: opacity 0.2s;
+}
+.ctrl-btn:hover {
+  opacity: 0.9;
+}
+
+.run { background: #2ea44f; }
+.stop { background: #cb2431; }
+
+/* Canvasをアスペクト比を保ちつつ綺麗に収めるラッパー */
+.canvas-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  background: #000;
+}
+
+#game-canvas {
+  background: #1a1a1a;
+  box-shadow: 0 0 20px rgba(0,0,0,0.8);
+  /* _main.js 側で動的に最大幅やリサイズ処理を制御するよ */
+}

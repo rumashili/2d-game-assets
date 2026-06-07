@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JS-Scratch Editor</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="container">
+    <div class="panel node-tree">
+      <div class="tree-header">📁 PROJECT</div>
+      <ul id="tree-root">
+        <li class="folder">
+          <span>📂 script</span>
+          <ul>
+            <li class="file-item active">📜 game.js</li>
+          </ul>
+        </li>
+        <li class="folder">
+          <span>📂 costume</span>
+          <button class="add-btn" id="add-costume-btn">+</button>
+          <ul id="costume-list"><li class="empty-msg">空のフォルダ</li></ul>
+        </li>
+        <li class="folder">
+          <span>📂 sound</span>
+          <button class="add-btn" id="add-sound-btn">+</button>
+          <ul id="sound-list"><li class="empty-msg">空のフォルダ</li></ul>
+        </li>
+      </ul>
+      <div class="export-zone">
+        <button id="export-btn">💾 プロジェクト保存 (ZIP)</button>
+      </div>
+    </div>
+
+    <div class="panel editor-area" id="editor-panel">
+      <div class="panel-header">📝 editor / script / game.js</div>
+      <textarea id="code-input" spellcheck="false"></textarea>
+    </div>
+
+    <div class="resizer" id="drag-bar"></div>
+
+    <div class="panel game-area" id="game-panel">
+      <div class="game-controls">
+        <button id="run-btn" class="ctrl-btn run">🟢 実行 (緑の旗)</button>
+        <button id="stop-btn" class="ctrl-btn stop">🔴 停止</button>
+      </div>
+      <div class="canvas-wrapper">
+        <canvas id="game-canvas"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="_main.js"></script>
+</body>
+</html>
